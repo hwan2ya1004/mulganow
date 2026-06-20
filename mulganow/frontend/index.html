@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>물가나우 | MulgaNow</title>
+
+<!-- GSAP CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+
+<!-- Chart.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- 헤더 -->
+<header class="topbar" id="topbar">
+  <div class="brand" id="brandHome" role="button" tabindex="0" title="홈으로 이동 (전체 초기화)">
+    <div class="brand-logo" id="brandLogo">🛒</div>
+    <div class="brand-text">
+      <span class="brand-mark">물가나우</span>
+      <span class="brand-sub">MulgaNow</span>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="cls-toggle">
+      <button class="cls-btn active" data-val="01">소매가</button>
+      <button class="cls-btn" data-val="02">도매가</button>
+    </div>
+    <input type="hidden" id="clsSelect" value="01">
+  </div>
+</header>
+
+<!-- 히어로 -->
+<section class="hero" id="heroSection">
+  <div class="hero-inner">
+    <h1 id="heroTitle">오늘 장바구니 물가,<br>한눈에 확인하세요</h1>
+    <p id="heroSub">농산물유통정보(KAMIS) 공공데이터 기반 · 실시간 가격 정보</p>
+    <div class="search-wrap" id="heroSearch">
+      <div class="search-row">
+        <span class="search-icon">🔍</span>
+        <input id="searchInput" type="text" placeholder="품목 검색 (예: 양파, 배추, 사과)" />
+        <button id="clearBtn" class="clear-btn" style="display:none;" title="검색어 지우기">✕</button>
+        <button id="searchBtn">검색</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 배경 파티클 -->
+  <div class="hero-particles" aria-hidden="true">
+    <span class="particle" style="--x:10%;--y:20%;--s:1.2;--d:0s">🌾</span>
+    <span class="particle" style="--x:85%;--y:15%;--s:0.8;--d:0.5s">🥬</span>
+    <span class="particle" style="--x:20%;--y:70%;--s:1;--d:1s">🍎</span>
+    <span class="particle" style="--x:75%;--y:65%;--s:0.9;--d:1.5s">🥩</span>
+    <span class="particle" style="--x:50%;--y:80%;--s:0.7;--d:0.8s">🐟</span>
+    <span class="particle" style="--x:92%;--y:45%;--s:1.1;--d:0.3s">🌿</span>
+  </div>
+</section>
+
+<main>
+  <!-- 카테고리 필터 탭 -->
+  <div class="filter-bar" id="filterBar">
+    <button class="filter-btn active" data-cat="">전체</button>
+    <button class="filter-btn" data-cat="100">🌾 식량작물</button>
+    <button class="filter-btn" data-cat="100" data-sub="두류">🌱 두류</button>
+    <button class="filter-btn" data-cat="200">🥬 채소류</button>
+    <button class="filter-btn" data-cat="300">🌿 특용작물</button>
+    <button class="filter-btn" data-cat="400">🍎 과일류</button>
+    <button class="filter-btn" data-cat="500">🥩 축산물</button>
+    <button class="filter-btn" data-cat="600">🐟 수산물</button>
+    <button id="resetBtn" class="reset-btn" title="검색어·필터·정렬 전체 초기화">↺ 초기화</button>
+  </div>
+
+  <!-- 정렬 + 상태 표시 -->
+  <div class="status-row" id="statusRow">
+    <span id="statusText"></span>
+    <div class="sort-btns" id="sortBtns">
+      <button class="sort-btn active" data-sort="default" title="기본순">기본순</button>
+      <button class="sort-btn" data-sort="price-desc" title="가격 높은 순">💰 가격 높은 순</button>
+      <button class="sort-btn" data-sort="price-asc" title="가격 낮은 순">💸 가격 낮은 순</button>
+    </div>
+  </div>
+
+  <!-- 스켈레톤 로딩 -->
+  <div class="grid" id="skeletonGrid">
+    <div class="skeleton-card"></div>
+    <div class="skeleton-card"></div>
+    <div class="skeleton-card"></div>
+    <div class="skeleton-card"></div>
+    <div class="skeleton-card"></div>
+    <div class="skeleton-card"></div>
+    <div class="skeleton-card"></div>
+    <div class="skeleton-card"></div>
+  </div>
+
+  <!-- 카드 그리드 -->
+  <div class="grid" id="cardGrid" style="display:none;"></div>
+</main>
+
+<!-- 상세 추이 모달 -->
+<div class="modal-backdrop" id="modalBackdrop">
+  <div class="modal" id="modalBox">
+    <button class="modal-close" id="modalClose">&times;</button>
+    <div class="modal-header">
+      <div class="modal-icon" id="modalIcon">🌾</div>
+      <div>
+        <h2 id="modalTitle">품목 상세</h2>
+        <p class="modal-sub" id="modalSub"></p>
+      </div>
+    </div>
+    <div class="price-compare" id="priceCompare"></div>
+
+    <!-- 최저가 구매처 (소매가 전용) -->
+    <div class="shop-section" id="shopSection" style="display:none;">
+      <div class="shop-section-header">
+        <span class="shop-section-title">🛒 오늘 최저가 비교</span>
+      </div>
+      <div class="shop-list" id="shopList">
+        <div class="shop-loading" id="shopLoading">
+          <span class="shop-spinner"></span> 최저가 검색 중...
+        </div>
+      </div>
+      <!-- 광고 영역: 최저가 카드 아래 -->
+      <div class="shop-ad-area" id="shopAdArea"></div>
+    </div>
+
+    <div class="trend-controls">
+      <label>조회 기간:
+        <select id="trendDays">
+          <option value="14">최근 14일</option>
+          <option value="30" selected>최근 30일</option>
+          <option value="90">최근 90일</option>
+        </select>
+      </label>
+      <span class="trend-hint" id="trendHint"></span>
+    </div>
+    <canvas id="trendChart" height="200"></canvas>
+  </div>
+</div>
+
+<footer class="site-footer">
+  <p>데이터 출처: 농산물유통정보(KAMIS) · MVP 프로토타입 · 실제 서비스 데이터와 차이가 있을 수 있습니다.</p>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>
