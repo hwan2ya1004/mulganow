@@ -16,6 +16,14 @@
       "dest": "api/index.py"
     },
     {
+      "src": "/consumer",
+      "dest": "mulganow/frontend/consumer.html"
+    },
+    {
+      "src": "/consumer/",
+      "dest": "mulganow/frontend/consumer.html"
+    },
+    {
       "src": "/(.*)",
       "dest": "mulganow/frontend/$1"
     }
