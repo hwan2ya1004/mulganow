@@ -152,12 +152,15 @@ def _request_xml(url: str, params: dict, retries: int = 2, timeout: int = 30) ->
     raise ConsumerPriceApiError(f"API 호출 실패 ({retries}회 재시도): {last_err}")
 
 
-def get_all_products(good_id: str = None) -> list[dict]:
+def get_all_products(good_id: str = None, retries: int = 1, timeout: int = 15) -> list[dict]:
     """
     전체 생필품 목록을 조회합니다.
 
     Args:
         good_id (str, optional): 특정 상품 아이디. 미입력 시 전체 조회.
+        retries (int, optional): 타임아웃 시 재시도 횟수. 서버리스(Vercel) 환경에서
+                                  함수 실행시간 제한에 걸리지 않도록 기본값을 짧게 설정합니다.
+        timeout (int, optional): 요청 타임아웃(초).
 
     Returns:
         list[dict]: 상품 정보 딕셔너리 리스트
@@ -177,7 +180,8 @@ def get_all_products(good_id: str = None) -> list[dict]:
     if good_id:
         params["goodId"] = good_id
 
-    return _request_xml(PRODUCT_INFO_URL, params)
+    return _request_xml(PRODUCT_INFO_URL, params, retries=retries, timeout=timeout)
+
 
 
 
