@@ -14,6 +14,7 @@ app.py
 import os
 import time
 import threading
+import tempfile
 import urllib.request
 import json as json_lib
 from flask import Flask, jsonify, request, send_from_directory
@@ -39,7 +40,7 @@ CORS(app)
 #  백그라운드 스레드(병렬 처리)로 갱신합니다. 파일 캐시를 두어 서버 재시작
 #  시에도 이전에 조회한 가격 정보를 즉시 사용할 수 있게 합니다.)
 # ---------------------------------------------------------------------------
-_CONSUMER_CACHE_FILE = os.path.join(os.path.dirname(__file__), "consumer_price_cache.json")
+_CONSUMER_CACHE_FILE = os.path.join(tempfile.gettempdir(), "consumer_price_cache.json")
 
 _CONSUMER_CACHE = {
     "items": None,         # 가격 포함 전체 상품 리스트 (준비되면 채워짐)
