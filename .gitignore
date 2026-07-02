@@ -36,3 +36,9 @@ Thumbs.db
 
 # 테스트 캐시
 .pytest_cache/
+
+# 로그 및 캐시 파일
+*.log
+mulganow/backend/consumer_price_cache.json
+
+

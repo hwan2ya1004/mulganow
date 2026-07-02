@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>물가나우 | 생필품 가격 정보</title>
+
+<!-- GSAP CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+
+<!-- Chart.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+<link rel="stylesheet" href="style.css">
+<style>
+  /* 생필품 페이지 전용 추가 스타일 */
+  .unit-label {
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .card-detail {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-top: 4px;
+    line-height: 1.4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  .inspect-day-badge {
+    display: inline-block;
+    background: var(--primary-light);
+    color: var(--primary);
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 20px;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+</style>
+</head>
+<body>
+
+<!-- 헤더 -->
+<header class="topbar" id="topbar">
+  <div class="brand" id="brandHome" role="button" tabindex="0" title="홈으로 이동 (전체 초기화)">
+    <div class="brand-logo" id="brandLogo">🛒</div>
+    <div class="brand-text">
+      <span class="brand-mark">물가나우</span>
+      <span class="brand-sub">MulgaNow</span>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="topbar-divider"></div>
+    <nav style="display:flex;align-items:center;gap:4px;">
+      <a href="/" class="topbar-nav-btn">🌾 농산물</a>
+      <a href="/consumer" class="topbar-nav-btn consumer active">🧴 생필품</a>
+    </nav>
+  </div>
+</header>
+
+<!-- 히어로 -->
+<section class="hero" id="heroSection" style="background: linear-gradient(135deg, #0f172a 0%, #064e3b 50%, #16a34a 100%);">
+  <div class="hero-inner">
+    <h1 id="heroTitle">생필품 가격,<br>한눈에 확인하세요</h1>
+    <p id="heroSub">한국소비자원 참가격 공공데이터 기반 · 매주 금요일 업데이트</p>
+    <div class="search-wrap" id="heroSearch">
+      <div class="search-row">
+        <span class="search-icon">🔍</span>
+        <input id="searchInput" type="text" placeholder="상품 검색 (예: 샴푸, 세제, 치약)" />
+        <button id="clearBtn" class="clear-btn" style="display:none;" title="검색어 지우기">✕</button>
+        <button id="searchBtn">검색</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 배경 파티클 -->
+  <div class="hero-particles" aria-hidden="true">
+    <span class="particle" style="--x:10%;--y:20%;--s:1.2;--d:0s">🧴</span>
+    <span class="particle" style="--x:85%;--y:15%;--s:0.8;--d:0.5s">🧼</span>
+    <span class="particle" style="--x:20%;--y:70%;--s:1;--d:1s">🪥</span>
+    <span class="particle" style="--x:75%;--y:65%;--s:0.9;--d:1.5s">🧹</span>
+    <span class="particle" style="--x:50%;--y:80%;--s:0.7;--d:0.8s">🧺</span>
+    <span class="particle" style="--x:92%;--y:45%;--s:1.1;--d:0.3s">🪣</span>
+  </div>
+</section>
+
+<main>
+  <!-- 카테고리 필터 탭 -->
+  <div class="filter-bar" id="filterBar">
+    <button class="filter-btn active" data-cat="">전체</button>
+    <button class="filter-btn" data-cat="030101">🥩 신선식품</button>
+    <button class="filter-btn" data-cat="030102">🥬 채소·농산물</button>
+    <button class="filter-btn" data-cat="030103">🐟 수산물</button>
+    <button class="filter-btn" data-cat="030201">🍜 가공식품</button>
+    <button class="filter-btn" data-cat="030202">🥫 수산가공품</button>
+    <button class="filter-btn" data-cat="030203">🥛 유제품·육가공</button>
+    <button class="filter-btn" data-cat="030204">🧂 조미료·양념</button>
+    <button class="filter-btn" data-cat="030205">🍬 과자·빙과</button>
+    <button class="filter-btn" data-cat="030206">🧃 음료·주류</button>
+    <button class="filter-btn" data-cat="030301">🧴 위생·바디케어</button>
+    <button class="filter-btn" data-cat="030302">🧹 생활용품·세제</button>
+    <button class="filter-btn" data-cat="030304">💊 의약외품·뷰티</button>
+    <button class="filter-btn" data-cat="030305">🐾 반려동물</button>
+    <button id="resetBtn" class="reset-btn" title="검색어·필터·정렬 전체 초기화">↺ 초기화</button>
+  </div>
+
+  <!-- 정렬 + 상태 표시 -->
+  <div class="status-row" id="statusRow">
+    <span id="statusText"></span>
+    <div class="sort-btns" id="sortBtns">
+      <button class="sort-btn active" data-sort="default" title="기본순">기본순</button>
+      <button class="sort-btn" data-sort="price-desc" title="가격 높은 순">💰 가격 높은 순</button>
+      <button class="sort-btn" data-sort="price-asc" title="가격 낮은 순">💸 가격 낮은 순</button>
+    </div>
+  </div>
+
+  <!-- 스켈레톤 로딩 -->
+  <div class="grid" id="skeletonGrid">
+    <div class="skeleton-card"></div>
+    <div class="skeleton-card"></div>
+    <div class="skeleton-card"></div>
+    <div class="skeleton-card"></div>
+    <div class="skeleton-card"></div>
+    <div class="skeleton-card"></div>
+    <div class="skeleton-card"></div>
+    <div class="skeleton-card"></div>
+  </div>
+
+  <!-- 카드 그리드 -->
+  <div class="grid" id="cardGrid" style="display:none;"></div>
+</main>
+
+<!-- 상세 모달 -->
+<div class="modal-backdrop" id="modalBackdrop">
+  <div class="modal" id="modalBox">
+    <button class="modal-close" id="modalClose">&times;</button>
+    <div class="modal-header">
+      <div class="modal-icon" id="modalIcon">🧴</div>
+      <div>
+        <h2 id="modalTitle">상품 상세</h2>
+        <p class="modal-sub" id="modalSub"></p>
+      </div>
+    </div>
+    <div class="price-compare" id="priceCompare"></div>
+
+    <!-- 온라인 최저가 섹션 (애드픽 연동) -->
+    <div id="shopSection" style="display:none; margin-top:18px;">
+      <div class="shop-section-title">🛍️ 온라인 최저가</div>
+      <div id="shopList"></div>
+      <div id="shopAdArea"></div>
+    </div>
+
+    <div class="trend-controls" id="trendControls" style="display:none;">
+      <span class="trend-hint" id="trendHint"></span>
+    </div>
+  </div>
+</div>
+
+<footer class="site-footer">
+  <p>데이터 출처: 한국소비자원 참가격(price.go.kr) · 공공데이터포털 · 매주 금요일 업데이트 · 실제 판매가와 차이가 있을 수 있습니다.</p>
+</footer>
+
+<script src="consumer.js?v=2"></script>
+</body>
+</html>

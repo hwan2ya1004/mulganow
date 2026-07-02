@@ -127,6 +127,43 @@ body {
   background: rgba(255,255,255,0.15);
 }
 
+/* ===== 페이지 간 네비게이션 (농산물 ↔ 생필품) ===== */
+.topbar-divider {
+  width: 1px;
+  height: 24px;
+  background: rgba(255,255,255,0.15);
+  margin: 0 4px;
+}
+
+.topbar-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.6);
+  text-decoration: none;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.topbar-nav-btn:hover {
+  color: white;
+  background: rgba(255,255,255,0.1);
+}
+
+.topbar-nav-btn.active {
+  background: var(--primary);
+  color: white;
+}
+
+.topbar-nav-btn.consumer.active {
+  background: #16a34a;
+}
+
+
 /* ===== 히어로 ===== */
 .hero {
   background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #1d4ed8 100%);

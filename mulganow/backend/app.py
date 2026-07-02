@@ -12,6 +12,8 @@ app.py
 """
 
 import os
+import time
+import threading
 import urllib.request
 import json as json_lib
 from flask import Flask, jsonify, request, send_from_directory
@@ -20,8 +22,10 @@ from dotenv import load_dotenv
 
 load_dotenv()  # .env 파일 로드 (KAMIS_CERT_KEY, KAMIS_CERT_ID)
 
-import kamis_client    # noqa: E402  (load_dotenv 이후 import 해야 환경변수가 반영됨)
-import adpick_client   # noqa: E402  (애드픽 커미션 링크 변환)
+import kamis_client            # noqa: E402  (load_dotenv 이후 import 해야 환경변수가 반영됨)
+import adpick_client            # noqa: E402  (애드픽 커미션 링크 변환)
+import consumer_price_client   # noqa: E402  (한국소비자원 생필품 가격 정보)
+
 
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
 
@@ -30,11 +34,134 @@ CORS(app)
 
 
 # ---------------------------------------------------------------------------
+# 한국소비자원 생필품 가격 정보 - 인메모리 캐시 + 파일 캐시
+# (가격 조회 API가 상품별 개별 호출이라 느리므로, 최초 1회 조회 후 캐싱하고
+#  백그라운드 스레드(병렬 처리)로 갱신합니다. 파일 캐시를 두어 서버 재시작
+#  시에도 이전에 조회한 가격 정보를 즉시 사용할 수 있게 합니다.)
+# ---------------------------------------------------------------------------
+_CONSUMER_CACHE_FILE = os.path.join(os.path.dirname(__file__), "consumer_price_cache.json")
+
+_CONSUMER_CACHE = {
+    "items": None,         # 가격 포함 전체 상품 리스트 (준비되면 채워짐)
+    "basic_items": None,   # 가격 없이 상품 목록만 (빠른 최초 응답용)
+    "ready": False,
+    "loading": False,
+    "lock": threading.Lock(),
+}
+
+
+def _load_consumer_cache_from_file():
+    """서버 시작 시 파일 캐시가 있으면 읽어서 인메모리 캐시에 채웁니다."""
+    import logging
+    try:
+        if os.path.exists(_CONSUMER_CACHE_FILE):
+            with open(_CONSUMER_CACHE_FILE, "r", encoding="utf-8") as f:
+                data = json_lib.load(f)
+            items = data.get("items")
+            if items:
+                _CONSUMER_CACHE["items"] = items
+                _CONSUMER_CACHE["ready"] = True
+                logging.info("[consumer] 파일 캐시에서 %d개 상품 로드 완료", len(items))
+    except Exception as e:  # noqa: BLE001
+        logging.warning("[consumer] 파일 캐시 로드 실패: %s", e)
+
+
+def _save_consumer_cache_to_file(items):
+    """가격 조회 완료 후 파일 캐시에 저장합니다 (다음 서버 재시작 시 즉시 사용)."""
+    import logging
+    try:
+        with open(_CONSUMER_CACHE_FILE, "w", encoding="utf-8") as f:
+            json_lib.dump({"items": items}, f, ensure_ascii=False)
+    except Exception as e:  # noqa: BLE001
+        logging.warning("[consumer] 파일 캐시 저장 실패: %s", e)
+
+
+# 서버 시작 시 파일 캐시 즉시 로드 (있으면 바로 가격 표시 가능)
+_load_consumer_cache_from_file()
+
+
+
+def _consumer_get(d: dict, *keys: str, default=""):
+    """대소문자 무관 딕셔너리 접근 헬퍼."""
+    for k in keys:
+        v = d.get(k) or d.get(k.lower()) or d.get(k.upper())
+        if v is not None:
+            return v
+    return default
+
+
+def _get_consumer_basic_items():
+    """가격 없이 상품 목록만 빠르게 조회 (캐시 적용)."""
+    if _CONSUMER_CACHE["basic_items"] is not None:
+        return _CONSUMER_CACHE["basic_items"]
+
+    products = consumer_price_client.get_all_products()
+    basic = []
+    for p in products:
+        basic.append({
+            "good_id":           _consumer_get(p, "goodId", "goodid"),
+            "good_name":         _consumer_get(p, "goodName", "goodname"),
+            "smlcls_code":       _consumer_get(p, "goodSmlclsCode", "goodsmlclscode"),
+            "unit_div_code":     _consumer_get(p, "goodUnitDivCode", "goodunitdivcode"),
+            "base_cnt":          _consumer_get(p, "goodBaseCnt", "goodbasecnt"),
+            "total_cnt":         _consumer_get(p, "goodTotalCnt", "goodtotalcnt"),
+            "total_div_code":    _consumer_get(p, "goodTotalDivCode", "goodtotaldivcode"),
+            "detail_mean":       _consumer_get(p, "detailMean", "detailmean"),
+            "product_entp_code": _consumer_get(p, "productEntpCode", "productentpcode"),
+            "price":             None,
+            "inspect_day":       None,
+        })
+    _CONSUMER_CACHE["basic_items"] = basic
+    return basic
+
+
+def _load_consumer_full_items_bg():
+    """백그라운드 스레드에서 가격 포함 전체 목록을 조회하여 캐시에 채우고 파일에 저장합니다."""
+    import logging
+    with _CONSUMER_CACHE["lock"]:
+        if _CONSUMER_CACHE["loading"]:
+            return
+        _CONSUMER_CACHE["loading"] = True
+    try:
+        full = consumer_price_client.get_products_with_prices()
+        _CONSUMER_CACHE["items"] = full
+        _CONSUMER_CACHE["ready"] = True
+        _save_consumer_cache_to_file(full)
+    except Exception as e:  # noqa: BLE001 - 백그라운드 작업이므로 광범위 예외 처리
+        logging.exception("[consumer] 가격 목록 로드 실패: %s", e)
+    finally:
+        _CONSUMER_CACHE["loading"] = False
+
+
+# 서버 시작 시: 파일 캐시가 없으면(최초 실행) 즉시 백그라운드 가격 조회를 시작합니다.
+# 파일 캐시가 있으면 이미 ready=True이므로 API 응답은 즉시 캐시된 가격을 반환하고,
+# 그 사이 최신 가격으로 갱신하기 위해 백그라운드 갱신도 함께 시작합니다.
+# (Flask debug 모드의 reloader가 모듈을 두 번 로드하므로, 실제 서빙 프로세스에서만
+#  1회 실행되도록 WERKZEUG_RUN_MAIN 환경변수로 가드합니다.)
+def _start_consumer_background_refresh():
+    t = threading.Thread(target=_load_consumer_full_items_bg, daemon=True)
+    t.start()
+
+
+if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or not app.debug:
+    _start_consumer_background_refresh()
+
+
+
+
+# ---------------------------------------------------------------------------
 # 프론트엔드 정적 파일 서빙
 # ---------------------------------------------------------------------------
 @app.route("/")
 def index():
     return send_from_directory(FRONTEND_DIR, "index.html")
+
+
+@app.route("/consumer")
+def consumer_page():
+    """생필품(한국소비자원 참가격) 페이지."""
+    return send_from_directory(FRONTEND_DIR, "consumer.html")
+
 
 
 # ---------------------------------------------------------------------------
@@ -1182,5 +1309,120 @@ def shop_prices():
     return jsonify({"ok": True, "count": len(items[:5]), "items": items[:5]})
 
 
+# ---------------------------------------------------------------------------
+# API: 생필품(한국소비자원 참가격) 전체 목록 + 가격
+# ---------------------------------------------------------------------------
+@app.route("/api/consumer-prices")
+def consumer_prices():
+    """
+    한국소비자원 생필품 가격 정보를 반환합니다.
+
+    Query Params:
+        q (str): 상품명 검색 키워드 (선택)
+        fast (str): "1"이면 가격 조회를 기다리지 않고 상품 목록만 즉시 반환하고,
+                     백그라운드에서 가격 정보를 채웁니다.
+                     (준비 완료 전까지는 응답에 prices_ready: false 포함)
+    """
+    keyword = request.args.get("q", "").strip()
+    fast = request.args.get("fast", "") == "1"
+
+    try:
+        if _CONSUMER_CACHE["ready"] and _CONSUMER_CACHE["items"] is not None:
+            # 이미 가격까지 준비된 캐시가 있으면 그대로 사용
+            items = _CONSUMER_CACHE["items"]
+            prices_ready = True
+            inspect_day = ""
+            for it in items:
+                if it.get("inspect_day"):
+                    inspect_day = it["inspect_day"]
+                    break
+        elif fast:
+            # 빠른 응답: 가격 없이 상품 목록만 반환하고 백그라운드에서 가격 로드 시작
+            items = _get_consumer_basic_items()
+            prices_ready = False
+            inspect_day = ""
+            if not _CONSUMER_CACHE["loading"]:
+                t = threading.Thread(target=_load_consumer_full_items_bg, daemon=True)
+                t.start()
+        else:
+            # 동기 방식: 가격까지 포함해 전체 조회 (느릴 수 있음)
+            items = consumer_price_client.get_products_with_prices()
+            _CONSUMER_CACHE["items"] = items
+            _CONSUMER_CACHE["ready"] = True
+            prices_ready = True
+            inspect_day = ""
+            for it in items:
+                if it.get("inspect_day"):
+                    inspect_day = it["inspect_day"]
+                    break
+    except consumer_price_client.ConsumerPriceApiError as e:
+        return jsonify({"ok": False, "error": str(e)}), 502
+
+    if keyword:
+        items = [it for it in items if keyword in (it.get("good_name") or "")]
+
+    return jsonify({
+        "ok": True,
+        "count": len(items),
+        "items": items,
+        "prices_ready": prices_ready,
+        "inspect_day": inspect_day,
+    })
+
+
+# ---------------------------------------------------------------------------
+# API: 생필품 온라인 최저가 검색 (애드픽 /search API 사용)
+# ---------------------------------------------------------------------------
+@app.route("/api/consumer-shop-prices")
+def consumer_shop_prices():
+    """
+    애드픽 상품 검색 API를 통해 생필품의 온라인 최저가 상품 목록을 반환합니다.
+
+    Query Params:
+        q (str): 검색 상품명, 필수
+        price (str): 참가격(원), 선택 - 가격 범위 필터링에 사용
+    """
+    query = request.args.get("q", "").strip()
+    if not query:
+        return jsonify({"ok": False, "error": "q 파라미터는 필수입니다."}), 400
+
+    adpick_key = os.environ.get("ADPICK_API_KEY", "")
+    if not adpick_key:
+        return jsonify({"ok": False, "error": "ADPICK_API_KEY가 설정되지 않았습니다."}), 500
+
+    ref_price_raw = request.args.get("price", "")
+    try:
+        ref_price = int(ref_price_raw) if ref_price_raw else None
+    except (ValueError, TypeError):
+        ref_price = None
+
+    items = adpick_client.search_products(query, limit=20, api_key=adpick_key)
+
+    if not items:
+        return jsonify({"ok": True, "count": 0, "items": []})
+
+    # 링크 없는 상품 제외
+    items = [it for it in items if it.get("link")]
+
+    # 참가격 대비 범위 필터링 (0.3배 ~ 5배) - 과도하게 동떨어진 가격 제외
+    if ref_price and ref_price > 0:
+        price_min = ref_price * 0.3
+        price_max = ref_price * 5.0
+        price_filtered = [
+            it for it in items
+            if it.get("price") is None or (price_min <= it["price"] <= price_max)
+        ]
+        items = price_filtered if len(price_filtered) >= 2 else items
+
+    if not items:
+        return jsonify({"ok": True, "count": 0, "items": []})
+
+    items.sort(key=lambda x: x["price"] if x["price"] is not None else 999999999)
+
+    return jsonify({"ok": True, "count": len(items[:5]), "items": items[:5]})
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
+
+
