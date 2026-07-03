@@ -95,6 +95,16 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.topbar-right::-webkit-scrollbar { display: none; }
+
+.brand {
+  flex-shrink: 0;
 }
 
 .cls-toggle {
@@ -103,6 +113,11 @@ body {
   border-radius: 10px;
   padding: 3px;
   gap: 2px;
+  flex-shrink: 0;
+}
+
+.topbar-right nav {
+  flex-shrink: 0;
 }
 
 .cls-btn {
@@ -133,6 +148,7 @@ body {
   height: 24px;
   background: rgba(255,255,255,0.15);
   margin: 0 4px;
+  flex-shrink: 0;
 }
 
 .topbar-nav-btn {
@@ -1093,11 +1109,31 @@ footer {
 
 /* ===== 반응형 ===== */
 @media (max-width: 640px) {
-  .topbar { padding: 0 16px; }
+  .topbar { padding: 0 12px; height: 56px; }
+  .brand-sub { display: none; }
+  .brand-logo { font-size: 22px; }
+  .brand-mark { font-size: 15px; }
+  .topbar-right { gap: 6px; }
+  .cls-btn { padding: 5px 10px; font-size: 12px; }
+  .topbar-divider { margin: 0 2px; }
+  .topbar-nav-btn { padding: 6px 9px; font-size: 12px; gap: 3px; }
   .hero { padding: 44px 16px 54px; }
   .hero h1 { font-size: 26px; }
+  .search-row input { font-size: 16px; } /* iOS: 16px 미만이면 입력 시 자동 확대됨 */
   main { padding: 0 16px 60px; }
+  .filter-btn { padding: 9px 16px; }
   .grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
-  .price-compare { grid-template-columns: repeat(3, 1fr); }
+  .price-compare { grid-template-columns: repeat(2, 1fr); }
   .modal { padding: 20px; }
+  .trend-controls select { font-size: 16px; }
+}
+
+@media (max-width: 420px) {
+  .topbar-nav-label { display: none; }
+  .cls-btn { padding: 5px 8px; }
+}
+
+@media (max-width: 640px) {
+  .trend-controls { flex-wrap: wrap; row-gap: 6px; }
+  .trend-controls label { white-space: nowrap; }
 }
