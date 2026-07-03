@@ -289,6 +289,7 @@ def get_products_with_prices(inspect_day: str = None) -> list[dict]:
 
     found_day = None
     hard_auth_error = False  # 키 미등록/만료 등, 재시도해도 의미 없는 오류
+    last_error = None  # 마지막으로 받은 오류 메시지 (데이터 없음/오류 구분용)
     for day in candidate_days:
         # 첫 번째 goodId로 데이터 존재 여부 확인
         if not good_ids:
@@ -301,6 +302,7 @@ def get_products_with_prices(inspect_day: str = None) -> list[dict]:
                 break
         except ConsumerPriceApiError as e:
             err_str = str(e)
+            last_error = err_str
             # 키 미등록/만료(코드 30, 31)는 날짜를 바꿔도 해결 안 되므로 즉시 중단
             if any(code in err_str for code in ["오류코드: 30", "오류코드: 31",
                                                   "Invalid Authentication", "등록되지 않은", "기간이 만료"]):
@@ -310,12 +312,20 @@ def get_products_with_prices(inspect_day: str = None) -> list[dict]:
             # 코드 90("아직 활성화되지 않음") 등은 공공데이터포털 게이트웨이 동기화
             # 이슈로 간헐적으로 발생하는 것으로 보여, 즉시 포기하지 않고 다른 날짜로
             # 계속 시도합니다.
+            logging.debug("[consumer_price] %s 조회 실패, 다음 날짜 시도: %s", day, err_str)
             continue
 
     has_valid_day = found_day is not None
     if not has_valid_day:
         if hard_auth_error:
             logging.warning("[consumer_price] 가격 API 인증 오류로 가격 조회 불가. 상품 목록만 반환.")
+        elif last_error:
+            # 모든 후보 날짜에서 매번 오류가 났음 — "데이터 없음"이 아니라 API 오류가
+            # 원인이므로 실제 오류 내용을 남겨서 둘을 혼동하지 않게 합니다.
+            logging.warning(
+                "[consumer_price] 최근 %d주 모두 오류로 조회 실패(마지막 오류: %s). 상품 목록만 반환.",
+                len(candidate_days), last_error,
+            )
         else:
             logging.warning("[consumer_price] 최근 %d주 내 가격 데이터 없음. 상품 목록만 반환.", len(candidate_days))
 
