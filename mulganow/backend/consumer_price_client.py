@@ -288,7 +288,7 @@ def get_products_with_prices(inspect_day: str = None) -> list[dict]:
         candidate_days.append(thursday.strftime("%Y%m%d"))
 
     found_day = None
-    auth_error = False  # 인증 오류 발생 시 즉시 중단 플래그
+    hard_auth_error = False  # 키 미등록/만료 등, 재시도해도 의미 없는 오류
     for day in candidate_days:
         # 첫 번째 goodId로 데이터 존재 여부 확인
         if not good_ids:
@@ -301,26 +301,29 @@ def get_products_with_prices(inspect_day: str = None) -> list[dict]:
                 break
         except ConsumerPriceApiError as e:
             err_str = str(e)
-            # 인증 오류(코드 90, 30, 31)는 날짜를 바꿔도 해결 안 되므로 즉시 중단
-            if any(code in err_str for code in ["오류코드: 90", "오류코드: 30", "오류코드: 31",
+            # 키 미등록/만료(코드 30, 31)는 날짜를 바꿔도 해결 안 되므로 즉시 중단
+            if any(code in err_str for code in ["오류코드: 30", "오류코드: 31",
                                                   "Invalid Authentication", "등록되지 않은", "기간이 만료"]):
                 logging.warning("[consumer_price] 가격 API 인증 오류 - 날짜 탐색 중단: %s", err_str)
-                auth_error = True
+                hard_auth_error = True
                 break
+            # 코드 90("아직 활성화되지 않음") 등은 공공데이터포털 게이트웨이 동기화
+            # 이슈로 간헐적으로 발생하는 것으로 보여, 즉시 포기하지 않고 다른 날짜로
+            # 계속 시도합니다.
             continue
 
-    if found_day is None:
-        if auth_error:
+    has_valid_day = found_day is not None
+    if not has_valid_day:
+        if hard_auth_error:
             logging.warning("[consumer_price] 가격 API 인증 오류로 가격 조회 불가. 상품 목록만 반환.")
         else:
             logging.warning("[consumer_price] 최근 %d주 내 가격 데이터 없음. 상품 목록만 반환.", len(candidate_days))
-        found_day = inspect_day
 
-    actual_inspect_day = found_day
+    actual_inspect_day = found_day or inspect_day
 
     # 4) 전체 goodId에 대해 가격 조회 (병렬 처리로 속도 대폭 개선)
-    #    인증 오류 또는 데이터 없음 시 건너뜀
-    if not auth_error and found_day is not None and good_ids:
+    #    유효한 날짜를 못 찾았으면 건너뜀
+    if has_valid_day and good_ids:
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
         def _fetch_one(gid: str):

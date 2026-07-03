@@ -1,0 +1,35 @@
+name: Refresh consumer prices
+
+on:
+  schedule:
+    - cron: "0 21 * * *" # 매일 06:00 KST
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r mulganow/backend/requirements.txt
+
+      - name: Refresh consumer price snapshot
+        env:
+          CONSUMER_PRICE_SERVICE_KEY: ${{ secrets.CONSUMER_PRICE_SERVICE_KEY }}
+        run: python mulganow/backend/refresh_consumer_prices.py
+
+      - name: Commit snapshot if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add mulganow/backend/data/consumer_prices_snapshot.json
+          git diff --cached --quiet || git commit -m "chore: 생필품 가격 스냅샷 갱신 [skip ci]"
+          git push

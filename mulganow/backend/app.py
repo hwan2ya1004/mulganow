@@ -42,6 +42,11 @@ CORS(app)
 # ---------------------------------------------------------------------------
 _CONSUMER_CACHE_FILE = os.path.join(tempfile.gettempdir(), "consumer_price_cache.json")
 
+# 저장소에 커밋되는 스냅샷 (GitHub Actions가 주기적으로 갱신 — refresh_consumer_prices.py 참고).
+# Vercel처럼 요청마다 새 컨테이너가 뜰 수 있는 서버리스 환경에서는 /tmp 캐시가 비어있는
+# 콜드 스타트가 흔하므로, 배포에 포함된 이 스냅샷을 안정적인 기본값으로 사용합니다.
+_CONSUMER_SNAPSHOT_FILE = os.path.join(os.path.dirname(__file__), "data", "consumer_prices_snapshot.json")
+
 _CONSUMER_CACHE = {
     "items": None,         # 가격 포함 전체 상품 리스트 (준비되면 채워짐)
     "basic_items": None,   # 가격 없이 상품 목록만 (빠른 최초 응답용)
@@ -52,7 +57,11 @@ _CONSUMER_CACHE = {
 
 
 def _load_consumer_cache_from_file():
-    """서버 시작 시 파일 캐시가 있으면 읽어서 인메모리 캐시에 채웁니다."""
+    """서버 시작 시 캐시가 있으면 읽어서 인메모리 캐시에 채웁니다.
+
+    우선순위: 1) /tmp 런타임 캐시(같은 프로세스가 이미 실시간 조회에 성공한 경우)
+             2) 저장소에 커밋된 스냅샷(콜드 스타트에서도 항상 사용 가능한 기본값)
+    """
     import logging
     try:
         if os.path.exists(_CONSUMER_CACHE_FILE):
@@ -62,9 +71,22 @@ def _load_consumer_cache_from_file():
             if items:
                 _CONSUMER_CACHE["items"] = items
                 _CONSUMER_CACHE["ready"] = True
-                logging.info("[consumer] 파일 캐시에서 %d개 상품 로드 완료", len(items))
+                logging.info("[consumer] 런타임 캐시에서 %d개 상품 로드 완료", len(items))
+                return
     except Exception as e:  # noqa: BLE001
-        logging.warning("[consumer] 파일 캐시 로드 실패: %s", e)
+        logging.warning("[consumer] 런타임 캐시 로드 실패: %s", e)
+
+    try:
+        if os.path.exists(_CONSUMER_SNAPSHOT_FILE):
+            with open(_CONSUMER_SNAPSHOT_FILE, "r", encoding="utf-8") as f:
+                data = json_lib.load(f)
+            items = data.get("items")
+            if items:
+                _CONSUMER_CACHE["items"] = items
+                _CONSUMER_CACHE["ready"] = True
+                logging.info("[consumer] 커밋된 스냅샷에서 %d개 상품 로드 완료", len(items))
+    except Exception as e:  # noqa: BLE001
+        logging.warning("[consumer] 스냅샷 로드 실패: %s", e)
 
 
 def _save_consumer_cache_to_file(items):
@@ -134,9 +156,10 @@ def _load_consumer_full_items_bg():
         _CONSUMER_CACHE["loading"] = False
 
 
-# 서버 시작 시: 파일 캐시가 없으면(최초 실행) 즉시 백그라운드 가격 조회를 시작합니다.
-# 파일 캐시가 있으면 이미 ready=True이므로 API 응답은 즉시 캐시된 가격을 반환하고,
-# 그 사이 최신 가격으로 갱신하기 위해 백그라운드 갱신도 함께 시작합니다.
+# 서버 시작 시: 캐시(런타임 캐시 또는 커밋된 스냅샷)가 전혀 없을 때만 백그라운드
+# 가격 조회를 시작합니다. 스냅샷은 GitHub Actions가 주기적으로 최신화하므로, 매 콜드
+# 스타트마다 실시간 조회를 또 시도할 필요가 없습니다(서버리스 환경에서는 완료되지도
+# 않고, 외부 API에 불필요한 부하만 줍니다).
 # (Flask debug 모드의 reloader가 모듈을 두 번 로드하므로, 실제 서빙 프로세스에서만
 #  1회 실행되도록 WERKZEUG_RUN_MAIN 환경변수로 가드합니다.)
 def _start_consumer_background_refresh():
@@ -144,7 +167,7 @@ def _start_consumer_background_refresh():
     t.start()
 
 
-if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or not app.debug:
+if not _CONSUMER_CACHE["ready"] and (os.environ.get("WERKZEUG_RUN_MAIN") == "true" or not app.debug):
     _start_consumer_background_refresh()
 
 
