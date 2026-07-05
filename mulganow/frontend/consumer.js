@@ -103,10 +103,21 @@ if (typeof gsap !== "undefined") {
 }
 
 // ── 카드 stagger 애니메이션 ──────────────────────────────
+// 카드가 많을수록 stagger 총 시간이 선형으로 늘어나 메인 스레드를 오래 점유하므로
+// 처음 일부 카드만 순차 등장시키고 나머지는 바로 최종 상태로 표시한다.
+const MAX_STAGGER_CARDS = 30;
+
 function animateCards() {
   if (typeof gsap === "undefined") return;
-  const cards = document.querySelectorAll(".price-card");
-  gsap.fromTo(cards,
+  const cards = Array.from(document.querySelectorAll(".price-card"));
+  const animated = cards.slice(0, MAX_STAGGER_CARDS);
+  const rest = cards.slice(MAX_STAGGER_CARDS);
+
+  if (rest.length) {
+    gsap.set(rest, { opacity: 1, y: 0, scale: 1, clearProps: "transform" });
+  }
+
+  gsap.fromTo(animated,
     { opacity: 0, y: 24, scale: 0.96 },
     { opacity: 1, y: 0, scale: 1, duration: 0.45, stagger: 0.045, ease: "power2.out", clearProps: "transform" }
   );
@@ -301,6 +312,8 @@ function renderCards(items) {
   cardGrid.innerHTML = "";
   cardGrid.style.display = "grid";
 
+  const fragment = document.createDocumentFragment();
+
   items.forEach((item) => {
     const card = document.createElement("div");
     card.className = "price-card";
@@ -326,8 +339,10 @@ function renderCards(items) {
     `;
 
     card.addEventListener("click", () => openDetailModal(item, catInfo.icon));
-    cardGrid.appendChild(card);
+    fragment.appendChild(card);
   });
+
+  cardGrid.appendChild(fragment);
 
   animateCards();
 }
