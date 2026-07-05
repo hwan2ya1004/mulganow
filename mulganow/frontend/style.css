@@ -26,11 +26,29 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* 시각적으로는 숨기되 검색엔진/스크린리더에는 노출 (SEO용 보조 헤딩) */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 body {
   font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", -apple-system, sans-serif;
   background: var(--bg);
   color: var(--ink);
   line-height: 1.5;
+}
+
+/* 모바일 탭 반응 지연(더블탭 확대 감지용 ~300ms 딜레이) 제거 */
+button, a, [role="button"], .price-card, .brand, .cls-btn, .filter-btn,
+.sort-btn, .reset-btn, .clear-btn, .sub-filter-btn, .shop-item, .shop-ad-item,
+.shop-mall-btn, .topbar-nav-btn, .modal-close {
+  touch-action: manipulation;
 }
 
 /* ===== 헤더 ===== */
