@@ -79,7 +79,6 @@ function buildUnitLabel(item) {
 // ══════════════════════════════════════════════════════════
 function initPageAnimation() {
   if (typeof gsap === "undefined") return;
-  gsap.registerPlugin(ScrollTrigger);
 
   const tl = gsap.timeline({ defaults: { ease: "power3.out" } });
 

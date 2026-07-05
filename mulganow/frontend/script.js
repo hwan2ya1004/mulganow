@@ -77,8 +77,6 @@ function getCatIcon(catCode, itemName) {
 function initPageAnimation() {
   if (typeof gsap === "undefined") return;
 
-  gsap.registerPlugin(ScrollTrigger);
-
   const tl = gsap.timeline({ defaults: { ease: "power3.out" } });
 
   // 헤더 슬라이드 다운
