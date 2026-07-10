@@ -772,7 +772,7 @@ def render_post_html(meta, enriched, slug):
 </article>
 
 <footer class="site-footer">
-  <p>© {date.today().year} 물가나우(MulgaNow). KAMIS 농산물유통정보 공공데이터 기반.</p>
+  <p>© {date.today().year} 물가나우(MulgaNow). KAMIS 농산물유통정보·한국소비자원 참가격 공공데이터 기반.</p>
 {BUSINESS_INFO_HTML}
 </footer>
 

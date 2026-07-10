@@ -1118,12 +1118,16 @@ footer {
 /* ===== 푸터 ===== */
 .site-footer {
   text-align: left;
-  color: #000000;
+  color: rgba(255,255,255,0.85);
+  background: var(--navy);
   font-weight: 500;
   font-size: 12px;
   padding: 24px 16px;
-  border-top: 1px solid #e2e8f0;
   margin-top: 20px;
+}
+
+.site-footer a {
+  color: #ffffff;
 }
 
 /* ===== 반응형 ===== */
