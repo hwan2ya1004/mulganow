@@ -1,0 +1,229 @@
+/* ===== 블로그 전용 스타일 (style.css 변수 재사용) ===== */
+
+.blog-hero {
+  background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #1d4ed8 100%);
+  padding: 48px 24px 56px;
+  text-align: center;
+}
+
+.blog-hero h1 {
+  font-size: 30px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.03em;
+  margin-bottom: 10px;
+}
+
+.blog-hero p {
+  color: rgba(255,255,255,0.65);
+  font-size: 15px;
+}
+
+/* ── 목록 페이지 ── */
+.blog-list {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 32px 20px 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.blog-card {
+  display: block;
+  background: var(--card-bg);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 22px;
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.blog-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-hover);
+  border-color: var(--primary);
+}
+
+.blog-card-date {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.blog-card-title {
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  margin-bottom: 8px;
+}
+
+.blog-card-excerpt {
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+/* ── 글 본문 페이지 ── */
+.article {
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 40px 20px 80px;
+}
+
+.article-meta {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.article-title {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.35;
+  margin-bottom: 24px;
+  color: var(--ink);
+}
+
+.article-body {
+  font-size: 16px;
+  line-height: 1.85;
+  color: var(--ink);
+}
+
+.article-body h2 {
+  font-size: 21px;
+  font-weight: 800;
+  margin: 36px 0 14px;
+  letter-spacing: -0.01em;
+}
+
+.article-body p {
+  margin-bottom: 18px;
+}
+
+.article-body strong {
+  color: var(--primary-dark);
+}
+
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 18px 0 28px;
+}
+
+.stat-box {
+  background: var(--down-bg);
+  border: 1px solid #bbf7d0;
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+
+.stat-box .label {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.stat-box .value {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--down);
+}
+
+.stat-box .sub {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.shop-pick-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 16px 0 32px;
+}
+
+.shop-pick {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--card-bg);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.shop-pick:hover {
+  border-color: var(--primary);
+  transform: translateY(-1px);
+}
+
+.shop-pick img {
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--flat-bg);
+}
+
+.shop-pick-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.shop-pick-mall {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--primary);
+  text-transform: uppercase;
+}
+
+.shop-pick-title {
+  font-size: 13.5px;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shop-pick-price {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--ink);
+  flex-shrink: 0;
+}
+
+.app-cta {
+  display: block;
+  text-align: center;
+  background: var(--primary);
+  color: #fff;
+  font-weight: 700;
+  font-size: 15px;
+  padding: 16px;
+  border-radius: 14px;
+  text-decoration: none;
+  margin: 28px 0;
+}
+
+.app-cta:hover {
+  background: var(--primary-dark);
+}
+
+.disclosure {
+  font-size: 12.5px;
+  color: var(--muted);
+  background: var(--flat-bg);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-top: 32px;
+}

@@ -24,6 +24,14 @@
       "dest": "mulganow/frontend/consumer.html"
     },
     {
+      "src": "/blog",
+      "dest": "mulganow/frontend/blog/index.html"
+    },
+    {
+      "src": "/blog/",
+      "dest": "mulganow/frontend/blog/index.html"
+    },
+    {
       "src": "/(.*)",
       "dest": "mulganow/frontend/$1"
     }

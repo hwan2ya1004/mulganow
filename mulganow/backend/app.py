@@ -187,6 +187,20 @@ def consumer_page():
     return send_from_directory(FRONTEND_DIR, "consumer.html")
 
 
+@app.route("/blog")
+@app.route("/blog/")
+def blog_index():
+    return send_from_directory(FRONTEND_DIR, "blog/index.html")
+
+
+@app.route("/blog/<path:filename>")
+def blog_post(filename):
+    """블로그 글/에셋. blog/ 하위 파일만 허용 (경로 이탈 방지)."""
+    if ".." in filename or filename.startswith("/"):
+        return "Not found", 404
+    return send_from_directory(os.path.join(FRONTEND_DIR, "blog"), filename)
+
+
 
 # ---------------------------------------------------------------------------
 # API: 오늘의 가격 (전체 품목, 당일/1일전/1개월전/1년전 비교 포함)
