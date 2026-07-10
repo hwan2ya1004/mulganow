@@ -12,6 +12,7 @@ Base URL: https://biz.adpick.co.kr/api/{apikey}/{function}?{params}
   - search_products(): 키워드로 여러 제휴몰 상품 검색 (커미션 링크 포함)
 """
 
+import logging
 import os
 import json
 import urllib.request
@@ -66,9 +67,10 @@ def get_commission_link(url: str, api_key: str | None = None, p_data: str = "") 
             data = json.loads(body)
     except urllib.error.HTTPError as e:
         # HTTP 오류 (401, 403, 404 등) → 원본 링크 반환
+        logging.warning("[adpick] get_commission_link HTTP 오류 %s: %s", e.code, url)
         return url
-    except Exception:
-        # 네트워크 오류, 타임아웃 등 → 원본 링크 반환
+    except Exception as e:  # noqa: BLE001 - 네트워크 오류, 타임아웃 등 → 원본 링크로 graceful fallback
+        logging.warning("[adpick] get_commission_link 실패(%s): %s", type(e).__name__, url)
         return url
 
     # 응답 파싱
@@ -123,12 +125,15 @@ def search_products(keyword: str, limit: int = 10, api_key: str | None = None, p
         with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
             body = resp.read().decode("utf-8")
             data = json.loads(body)
-    except urllib.error.HTTPError:
+    except urllib.error.HTTPError as e:
+        logging.warning("[adpick] search_products HTTP 오류 %s (keyword=%r)", e.code, keyword)
         return []
-    except Exception:
+    except Exception as e:  # noqa: BLE001 - 네트워크 오류, 타임아웃 등
+        logging.warning("[adpick] search_products 실패(%s, keyword=%r)", type(e).__name__, keyword)
         return []
 
     if not data.get("success"):
+        logging.warning("[adpick] search_products success=false (keyword=%r): %s", keyword, data.get("message"))
         return []
 
     raw_items = data.get("data", [])
