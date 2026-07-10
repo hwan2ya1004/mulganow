@@ -1,0 +1,35 @@
+name: Generate blog post
+
+on:
+  schedule:
+    - cron: "0 22 * * 1,4" # 매주 월/목 07:00 KST
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r mulganow/backend/requirements.txt
+
+      - name: Generate blog post
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python mulganow/backend/generate_blog_post.py
+
+      - name: Commit new post if created
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add mulganow/frontend/blog/ mulganow/frontend/sitemap.xml
+          git diff --cached --quiet || git commit -m "chore: 블로그 글 자동 발행"
+          git push
