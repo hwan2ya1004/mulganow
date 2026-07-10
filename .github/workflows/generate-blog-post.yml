@@ -22,8 +22,6 @@ jobs:
         run: pip install -r mulganow/backend/requirements.txt
 
       - name: Generate blog post
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python mulganow/backend/generate_blog_post.py
 
       - name: Commit new post if created

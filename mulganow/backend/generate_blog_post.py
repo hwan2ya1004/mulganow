@@ -2,24 +2,23 @@
 """
 generate_blog_post.py
 ----------------------
-KAMIS 가격 변동이 큰 품목을 골라, 클로드(Anthropic API)로 후킹멘트 카피를 써서
-frontend/blog/ 아래에 새 글을 자동 발행합니다.
+KAMIS 가격 변동이 큰 품목을 골라, 미리 써둔 후킹멘트 템플릿에 실제 데이터를 채워서
+frontend/blog/ 아래에 새 글을 자동 발행합니다. (AI API 비용 없음 — 순수 템플릿 방식)
 
 이미 배포된 물가나우 API(mulganow.vercel.app)를 그대로 호출해서 가격/제휴 데이터를
-가져오므로, KAMIS·애드픽 인증키는 이 스크립트에 필요 없습니다. 오직 실제 데이터만
-카피에 반영하고(가격·링크·이미지는 절대 AI가 지어내지 않음), 문구만 AI가 작성합니다.
+가져오므로, KAMIS·애드픽 인증키는 이 스크립트에 필요 없습니다. 가격·링크·이미지는
+항상 실제 데이터 그대로 사용합니다.
 
 실행: python generate_blog_post.py
-필요 환경변수: ANTHROPIC_API_KEY
+필요 환경변수: 없음
 """
 import json
 import os
+import random
 import re
-import sys
-from datetime import date, datetime, timezone
+from datetime import date
 
 import requests
-from anthropic import Anthropic
 
 SITE = "https://mulganow.vercel.app"
 BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -27,7 +26,50 @@ FRONTEND_DIR = os.path.join(BACKEND_DIR, "..", "frontend")
 BLOG_DIR = os.path.join(FRONTEND_DIR, "blog")
 
 TOP_N = 3
-MODEL = "claude-sonnet-5"
+
+TITLE_TEMPLATES_DROP = [
+    "{item} 값이 뚝! 한 달 새 {pct}% 내렸어요",
+    "지금 안 사면 아쉬운 {item}, {pct}% 저렴해졌습니다",
+    "{item} {pct}% 하락 — 장바구니 채우기 좋은 타이밍",
+    "요즘 {item} 왜 이렇게 싸졌을까? {pct}% 하락 이유",
+]
+TITLE_TEMPLATES_SURGE = [
+    "{item}값 또 올랐다... 한 달 새 {pct}% 급등",
+    "장바구니 비상! {item} {pct}% 뛰었어요",
+    "{item} {pct}% 상승, 미리 알아두면 좋은 것들",
+    "요즘 {item} 왜 이렇게 비싸졌을까? {pct}% 상승 이유",
+]
+
+INTRO_TEMPLATES_DROP = [
+    "장 보러 가기 전에 알아두면 좋은 소식이에요. 농산물유통정보(KAMIS) 데이터를 보니 {item} 가격이 눈에 띄게 내려갔습니다.",
+    "요즘 물가가 계속 오른다고 느끼셨다면, 오늘은 반가운 소식입니다. {item} 가격이 한 달 전보다 뚝 떨어졌어요.",
+    "매번 오르기만 하는 것 같은 장바구니 물가, 이번엔 다릅니다. {item} 가격이 큰 폭으로 내렸어요.",
+]
+INTRO_TEMPLATES_SURGE = [
+    "장 보러 가기 전에 미리 알아두시면 좋을 소식이에요. 농산물유통정보(KAMIS) 데이터를 보니 {item} 가격이 눈에 띄게 올랐습니다.",
+    "이번 주 장바구니 물가, 조금 부담스러워질 수 있어요. {item} 가격이 한 달 전보다 크게 뛰었습니다.",
+    "'요즘 왜 이렇게 비싸졌지?' 싶으셨다면 이유가 있었습니다. {item} 값이 큰 폭으로 상승했어요.",
+]
+
+HEADING_TEMPLATES_DROP = [
+    "📉 {item}, 지금이 살 타이밍",
+    "💰 {item}, 이번 주는 저렴해요",
+    "🛒 {item} 최저가 챙기기",
+]
+HEADING_TEMPLATES_SURGE = [
+    "📈 {item}, 미리 챙겨두세요",
+    "⚠️ {item}, 가격 오르기 전에",
+    "🛒 {item} 그나마 싸게 사는 법",
+]
+
+BODY_TEMPLATES_DROP = [
+    "{item} 가격이 한 달 전 {month_ago}원에서 오늘 {today}원으로 내려갔어요. 아래에서 오늘 기준 최저가를 확인해보세요.",
+    "한 달 전 {month_ago}원이었던 {item}, 오늘은 {today}원이에요. 지금 사두면 알뜰하게 장 볼 수 있습니다.",
+]
+BODY_TEMPLATES_SURGE = [
+    "{item} 가격이 한 달 전 {month_ago}원에서 오늘 {today}원으로 올랐어요. 그래도 아래에서 상대적으로 저렴한 곳을 찾아보세요.",
+    "한 달 전 {month_ago}원이었던 {item}, 오늘은 {today}원이 됐어요. 오르기 전에 미리 구매해두는 것도 방법입니다.",
+]
 
 GA_HEAD = """<!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-T8KNQN27VH"></script>
@@ -99,67 +141,45 @@ def already_posted_today():
     return any(f.startswith(today) for f in os.listdir(BLOG_DIR))
 
 
-def call_claude(enriched):
-    client = Anthropic()  # ANTHROPIC_API_KEY 환경변수 자동 사용
+def generate_copy(enriched):
+    """AI 없이, 실제 데이터를 후킹멘트 템플릿에 채워서 카피를 만듭니다."""
+    primary = enriched[0]["item"]
+    primary_pct = primary["month_change_pct"]
+    primary_drop = primary_pct < 0
 
-    lines = []
-    for i, e in enumerate(enriched, 1):
+    title_pool = TITLE_TEMPLATES_DROP if primary_drop else TITLE_TEMPLATES_SURGE
+    intro_pool = INTRO_TEMPLATES_DROP if primary_drop else INTRO_TEMPLATES_SURGE
+
+    title = random.choice(title_pool).format(item=primary["item_name"], pct=abs(primary_pct))
+    intro = random.choice(intro_pool).format(item=primary["item_name"])
+
+    names = [e["item"]["item_name"] for e in enriched]
+    meta_description = f"{names[0]} {abs(primary_pct)}% {'하락' if primary_drop else '상승'} 등, 이번 주 장바구니 물가 변동을 KAMIS 데이터로 정리했습니다."
+
+    items = []
+    for e in enriched:
         it = e["item"]
         pct = it["month_change_pct"]
-        direction = "상승" if pct > 0 else "하락"
-        lines.append(
-            f"{i}. {it['item_name']} ({it.get('category_name', '')}) - "
-            f"오늘 {it['today_price']:,}원, 한 달 전 {it['month_ago_price']:,}원, "
-            f"{direction} {abs(pct)}% (단위: {it.get('unit', '')})"
+        drop = pct < 0
+        heading = random.choice(HEADING_TEMPLATES_DROP if drop else HEADING_TEMPLATES_SURGE).format(
+            item=it["item_name"]
         )
-    data_block = "\n".join(lines)
-
-    prompt = f"""당신은 '물가나우'라는 장바구니 물가 비교 서비스의 블로그 카피라이터입니다.
-아래 실제 KAMIS(농산물유통정보) 가격 데이터를 바탕으로, 클릭을 유도하는 후킹멘트 스타일의
-블로그 글을 작성해주세요.
-
-[실제 데이터 - 숫자와 품목명은 절대 바꾸지 말고 그대로 사용]
-{data_block}
-
-[요구사항]
-- 사실(숫자·품목명)은 반드시 그대로 사용. 과장·허위 정보 절대 금지.
-- 표시광고법을 준수하는 선에서, 궁금증 유발·손해회피 심리를 자극하는 후킹멘트 톤.
-- "무조건 최저가", "국내 유일" 같은 근거 없는 배타적 최상급 표현 금지.
-- 친근한 존댓말체.
-- 아래 JSON 형식으로만 응답하세요. 다른 설명이나 마크다운 없이 순수 JSON만 출력.
-
-{{
-  "slug": "영문 kebab-case, 5단어 이내, 이번 글 핵심을 나타내는 슬러그",
-  "title": "후킹멘트가 담긴 제목 (30자 내외)",
-  "meta_description": "검색결과에 노출될 요약 (100자 이내)",
-  "intro": "글의 도입부 2~3문장. 궁금증을 유발하는 후킹 문장으로 시작.",
-  "items": [
-    {{"heading": "이모지로 시작하는 소제목 (품목별로 하나씩, 데이터 순서와 동일하게)", "body": "1~2문장 설명"}}
-  ]
-}}
-
-items 배열은 반드시 위 데이터와 같은 순서, 같은 개수({len(enriched)}개)로 작성하세요."""
-
-    resp = client.messages.create(
-        model=MODEL,
-        max_tokens=2000,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    text = resp.content[0].text.strip()
-
-    # 혹시 코드블록으로 감싸서 응답한 경우 벗겨내기
-    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip())
-
-    meta = json.loads(text)
-    if len(meta.get("items", [])) != len(enriched):
-        raise ValueError(
-            f"AI 응답 items 개수({len(meta.get('items', []))})가 "
-            f"입력 데이터 개수({len(enriched)})와 다릅니다."
+        body = random.choice(BODY_TEMPLATES_DROP if drop else BODY_TEMPLATES_SURGE).format(
+            item=it["item_name"],
+            month_ago=f"{it['month_ago_price']:,}",
+            today=f"{it['today_price']:,}",
         )
-    return meta
+        items.append({"heading": heading, "body": body})
+
+    return {
+        "title": title,
+        "meta_description": meta_description,
+        "intro": intro,
+        "items": items,
+    }
 
 
-def slugify_date_prefixed(raw_slug: str) -> str:
+def slugify_date_prefixed(raw_slug: str = "price-watch") -> str:
     slug = re.sub(r"[^a-z0-9-]+", "-", raw_slug.lower()).strip("-")
     slug = re.sub(r"-{2,}", "-", slug)
     return f"{date.today().isoformat()}-{slug}"
@@ -181,7 +201,8 @@ def render_shop_pick_html(pick):
 
 
 def render_post_html(meta, enriched, slug):
-    today = date.today().isoformat()
+    today_iso = date.today().isoformat()
+    today = date.today().strftime("%Y.%m.%d")
     url = f"{SITE}/blog/{slug}.html"
 
     stat_boxes = []
@@ -239,8 +260,8 @@ def render_post_html(meta, enriched, slug):
   "@type": "Article",
   "headline": {json.dumps(meta['title'], ensure_ascii=False)},
   "description": {json.dumps(meta['meta_description'], ensure_ascii=False)},
-  "datePublished": "{today}",
-  "dateModified": "{today}",
+  "datePublished": "{today_iso}",
+  "dateModified": "{today_iso}",
   "author": {{ "@type": "Organization", "name": "물가나우" }},
   "publisher": {{
     "@type": "Organization",
@@ -313,7 +334,7 @@ def update_index(meta, slug):
     with open(index_path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    today = date.today().isoformat()
+    today = date.today().strftime("%Y.%m.%d")
     card = f"""  <a class="blog-card" href="/blog/{slug}.html">
     <div class="blog-card-date">{today}</div>
     <div class="blog-card-title">{meta['title']}</div>
@@ -349,10 +370,6 @@ def update_sitemap(slug):
 
 
 def main():
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        print("ANTHROPIC_API_KEY 환경변수가 설정되지 않았습니다.")
-        sys.exit(1)
-
     if already_posted_today():
         print("오늘 이미 발행된 글이 있습니다. 건너뜁니다.")
         return
@@ -368,13 +385,9 @@ def main():
         print(f"제휴 링크가 있는 글감이 {len(enriched)}개뿐이라 오늘은 건너뜁니다.")
         return
 
-    try:
-        meta = call_claude(enriched)
-    except Exception as e:
-        print(f"AI 카피 생성 실패, 오늘은 건너뜁니다: {e}")
-        return
+    meta = generate_copy(enriched)
 
-    slug = slugify_date_prefixed(meta["slug"])
+    slug = slugify_date_prefixed()
     if os.path.exists(os.path.join(BLOG_DIR, f"{slug}.html")):
         slug = f"{slug}-2"
 
