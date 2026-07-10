@@ -22,6 +22,9 @@ jobs:
         run: pip install -r mulganow/backend/requirements.txt
 
       - name: Generate blog post
+        env:
+          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
         run: python mulganow/backend/generate_blog_post.py
 
       - name: Commit new post if created

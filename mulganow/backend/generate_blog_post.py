@@ -822,6 +822,90 @@ def update_sitemap(slug):
         f.write(content)
 
 
+# ---------------------------------------------------------------------------
+# 홍보팀 #1: 네이버 블로그용 원고를 메일로 발송
+# 네이버 블로그는 공개 포스팅 API가 없어서(2024.02 서비스 종료) 자동 발행이
+# 불가능합니다. 대신 매번 사람이 붙여넣기만 하면 되도록, 발행된 글과 같은
+# 내용을 네이버 블로그에 바로 쓸 수 있는 형태(이모지 유지, 마크다운 없는
+# 순수 텍스트, 해시태그 포함)로 정리해서 메일로 보냅니다.
+# ---------------------------------------------------------------------------
+NAVER_DRAFT_RECIPIENT = "seohilab@naver.com"
+
+
+def render_naver_draft(meta, enriched, cta_href, cta_label):
+    lines = [meta["title"], "", meta["intro"], ""]
+
+    for e, ai_item in zip(enriched, meta["items"]):
+        it = e["item"]
+        if e["kind"] == "consumer":
+            stat = f"🧴 {it['item_name']} 참가격 대비 {it['savings_pct']}% 저렴 (참가격 {it['participating_price']:,}원 → 최저가 {it['best_price']:,}원)"
+        else:
+            pct = it["month_change_pct"]
+            arrow = "▼" if pct < 0 else "▲"
+            stat = f"{arrow} {it['item_name']} {abs(pct)}% ({it['month_ago_price']:,}원 → {it['today_price']:,}원)"
+        lines.append(stat)
+    lines.append("")
+
+    has_produce = any(e["kind"] == "produce" for e in enriched)
+    has_consumer = any(e["kind"] == "consumer" for e in enriched)
+    source_notes = []
+    if has_produce:
+        source_notes.append("KAMIS 농산물유통정보")
+    if has_consumer:
+        source_notes.append("한국소비자원 참가격")
+    lines.append(f"(자료: {' · '.join(source_notes)})")
+    lines.append("")
+
+    for ai_item in meta["items"]:
+        lines.append(ai_item["heading"])
+        # 본문 템플릿은 "사실 문장. 아래에서 확인하세요." 2문장 구조인데, 이 메일에는
+        # 구매 링크 목록("아래")이 없어서 그 문장만 빼고 첫 문장(사실)만 씁니다.
+        first_sentence = ai_item["body"].split(". ", 1)[0].rstrip(".") + "."
+        lines.append(first_sentence)
+        lines.append("")
+
+    lines.append(f"👉 {cta_label}")
+    lines.append(cta_href)
+    lines.append("")
+
+    hashtags = ["#물가정보", "#물가나우", "#장바구니물가"]
+    for e in enriched:
+        name = re.sub(r"[/().,·]", " ", e["item"]["item_name"]).split()
+        if name:
+            hashtags.append(f"#{name[0]}")
+    lines.append(" ".join(dict.fromkeys(hashtags)))  # 순서 유지하며 중복 제거
+
+    return "\n".join(lines)
+
+
+def send_naver_draft_email(subject, body):
+    """Gmail SMTP로 네이버 블로그 원고를 발송합니다.
+
+    GMAIL_ADDRESS / GMAIL_APP_PASSWORD 환경변수가 없으면(로컬 테스트 등)
+    조용히 건너뜁니다 — 이 실패가 블로그 발행 자체를 막으면 안 되므로
+    main()에서도 예외를 삼키고 로그만 남깁니다.
+    """
+    import smtplib
+    from email.mime.text import MIMEText
+
+    gmail_address = os.environ.get("GMAIL_ADDRESS")
+    gmail_app_password = os.environ.get("GMAIL_APP_PASSWORD")
+    if not gmail_address or not gmail_app_password:
+        print("GMAIL_ADDRESS/GMAIL_APP_PASSWORD가 설정되지 않아 메일 발송을 건너뜁니다.")
+        return False
+
+    msg = MIMEText(body, _charset="utf-8")
+    msg["Subject"] = subject
+    msg["From"] = gmail_address
+    msg["To"] = NAVER_DRAFT_RECIPIENT
+
+    with smtplib.SMTP("smtp.gmail.com", 587, timeout=20) as server:
+        server.starttls()
+        server.login(gmail_address, gmail_app_password)
+        server.sendmail(gmail_address, [NAVER_DRAFT_RECIPIENT], msg.as_string())
+    return True
+
+
 def main():
     if already_posted_today():
         print("오늘 이미 발행된 글이 있습니다. 건너뜁니다.")
@@ -893,6 +977,19 @@ def main():
     update_sitemap(slug)
 
     print(f"POSTED::{slug}::{meta['title']}::mode={mode}::events={','.join(event_names) or 'none'}")
+
+    # 홍보팀 #1: 네이버 블로그용 원고 메일 발송 (실패해도 발행 자체는 이미 끝났으므로 무시)
+    has_consumer_only = all(e["kind"] == "consumer" for e in enriched)
+    if has_consumer_only:
+        cta_href, cta_label = f"{SITE}/consumer", "🧴 물가나우에서 생필품 최저가 전체 보기"
+    else:
+        cta_href, cta_label = f"{SITE}/", "🛒 물가나우에서 오늘 농산물 가격 전체 보기"
+    try:
+        draft = render_naver_draft(meta, enriched, cta_href, cta_label)
+        sent = send_naver_draft_email(f"[물가나우] 네이버 블로그 원고 - {meta['title']}", draft)
+        print(f"네이버 원고 메일 발송: {'성공' if sent else '건너뜀(계정 미설정)'}")
+    except Exception as e:
+        print(f"네이버 원고 메일 발송 실패(발행 자체는 정상 완료): {e}")
 
 
 if __name__ == "__main__":
