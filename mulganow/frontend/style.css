@@ -1117,7 +1117,7 @@ footer {
 
 /* ===== 푸터 ===== */
 .site-footer {
-  text-align: center;
+  text-align: left;
   color: var(--ink);
   font-size: 12px;
   padding: 24px 16px;
