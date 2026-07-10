@@ -296,7 +296,7 @@ def render_post_html(meta, enriched, slug):
 </header>
 
 <article class="article">
-  <p class="article-meta">{today} · 물가나우 편집팀</p>
+  <p class="article-meta">{today} · 물가나우 기획팀</p>
   <h1 class="article-title">{meta['title']}</h1>
 
   <div class="article-body">
