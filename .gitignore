@@ -2,6 +2,9 @@
 .env
 *.env
 
+# GA4 서비스 계정 키 (절대 GitHub에 올리면 안 됨!)
+*ga4-service-account*.json
+
 # Python
 __pycache__/
 *.py[cod]
