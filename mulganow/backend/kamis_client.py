@@ -19,11 +19,21 @@ import os
 import requests
 from datetime import date, timedelta
 
-BASE_URL = "http://www.kamis.or.kr/service/price/xml.do"
+BASE_URL = "https://www.kamis.or.kr/service/price/xml.do"
 
 # .env 또는 환경변수에서 인증정보를 읽어옵니다.
 CERT_KEY = os.environ.get("KAMIS_CERT_KEY", "")
 CERT_ID = os.environ.get("KAMIS_CERT_ID", "")
+
+# KAMIS 서버가 기본 python-requests User-Agent를 봇으로 간주해 406을 반환하는
+# 사례가 있어 브라우저처럼 보이는 헤더를 명시적으로 붙인다.
+REQUEST_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    ),
+    "Accept": "application/json, text/plain, */*",
+}
 
 
 class KamisApiError(Exception):
@@ -110,7 +120,7 @@ def get_period_trend(
 
 def _request(params: dict):
     try:
-        resp = requests.get(BASE_URL, params=params, timeout=10)
+        resp = requests.get(BASE_URL, params=params, headers=REQUEST_HEADERS, timeout=10)
         resp.raise_for_status()
     except requests.RequestException as e:
         raise KamisApiError(f"KAMIS API 호출 실패: {e}")

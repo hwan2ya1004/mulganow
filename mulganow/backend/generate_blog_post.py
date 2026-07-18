@@ -922,8 +922,8 @@ def main():
         items = fetch_today_prices()
         enriched = pick_candidates(items, n=TOP_N, seasonal_keywords=produce_keywords or None)
     except Exception as e:
-        print(f"가격/제휴 데이터 수집 실패, 오늘은 건너뜁니다: {e}")
-        return
+        enriched = []
+        print(f"농산물 가격 데이터 수집 실패, 생필품(참가격) 데이터로만 진행합니다: {e}")
 
     # 생필품(참가격) 데이터를 섞을지 결정 (기획팀 요청 #2).
     # 1) 발동 중인 절기 이벤트가 생필품과 직접 연관되면(예: 장마→제습제) 확률과
