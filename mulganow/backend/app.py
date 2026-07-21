@@ -507,7 +507,11 @@ def _normalize_item(it: dict):
     if today_price and month_ago:
         change_pct = round((today_price - month_ago) / month_ago * 100, 1)
 
-    unit_hint     = _get_unit_hint(item_name_raw, unit)  # 원본 이름으로 힌트 조회
+    # 원본(KAMIS) 이름으로 먼저 조회하고, 못 찾으면 소비자 친화적 표시명으로도 조회합니다.
+    # UNIT_WEIGHT_HINT는 "키위"/"한라봉"/"금귤"/"숙주나물"/"동태"처럼 DISPLAY_NAME_MAP
+    # 변환 후의 이름을 키로 등록해둔 항목이 있어서, 원본 이름("참다래"/"만감류"/"금감"/
+    # "숙주"/"명태")만으로 조회하면 이 항목들의 힌트가 영영 매칭되지 않았습니다.
+    unit_hint     = _get_unit_hint(item_name_raw, unit) or _get_unit_hint(item_name, unit)
 
     # KAMIS dailySalesList 응답에서 품목 코드 추출
     # 실제 필드명: item_code (일부 응답에서는 productno)
@@ -1229,6 +1233,9 @@ def shop_prices():
         # 조명/전기용품
         "전구", "꼬마전구", "LED", "조명", "램프", "형광등", "백열등",
         "스탠드", "무드등", "야간등", "취침등", "수면등",
+        # 인테리어/장식품 (예: "닭고기 벽걸이장식 철판액자" 같은 정보성 장식품이
+        # 재료명을 제목에 포함해 식재료 검색에 잘못 걸리는 경우 방지)
+        "벽걸이", "액자", "인테리어소품", "포스터액자", "월데코",
         # 화장품/바디케어/뷰티
         "바디로션", "바디크림", "바디워시", "바디오일", "바디버터", "바디스크럽",
         "샴푸", "린스", "컨디셔너", "트리트먼트", "헤어팩", "헤어오일",
